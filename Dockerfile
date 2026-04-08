@@ -16,7 +16,6 @@ COPY evaluator.js                      ./evaluator.js
 COPY package.json                      ./package.json
 COPY coding-combat-host.html           ./coding-combat-host.html
 COPY coding-combat-player.html         ./coding-combat-player.html
-COPY coding-combat-player2.html        ./coding-combat-player2.html
 
 RUN chown -R appuser:appgroup /app
 USER appuser
