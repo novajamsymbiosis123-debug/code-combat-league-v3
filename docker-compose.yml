@@ -2,8 +2,8 @@ version: "3.9"
 services:
   app:
     build: { context: ., dockerfile: Dockerfile, target: runner }
-    image: code-combat:latest
-    container_name: code-combat-app
+    image: code-combat-league:latest
+    container_name: code-combat-league-app
     restart: unless-stopped
     ports: ["${PORT:-4000}:4000"]
     environment:

@@ -2,7 +2,7 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm install
 
 # ── Stage 2: Production runtime ──────────────────────────────
 FROM node:20-alpine AS runner
@@ -21,12 +21,12 @@ COPY coding-combat-player2.html        ./coding-combat-player2.html
 RUN chown -R appuser:appgroup /app
 USER appuser
 
-EXPOSE 3000
+EXPOSE 4000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:3000/health > /dev/null || exit 1
+  CMD wget -qO- http://localhost:4000/health > /dev/null || exit 1
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=4000
 
 CMD ["node", "server.js"]
