@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CODE COMBAT // PLAYER</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet"/>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{--g:#00ff41;--m:#ff00ff;--r:#ff3366;--a:#ffaa00;--bg:#030609;--panel:rgba(6,12,24,.9);--bd:rgba(0,255,65,.2);--text:#d0e0d8}
+    html,body{height:100%;font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text)}
+    body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(0,255,65,.04),transparent 60%),radial-gradient(ellipse at 80% 50%,rgba(255,0,255,.03),transparent 60%);pointer-events:none;z-index:0}
+    .wrap{max-width:1200px;margin:0 auto;padding:1.5rem;position:relative;z-index:1}
+
+    @keyframes glow{from{text-shadow:0 0 10px var(--cc),0 0 20px rgba(0,255,65,.3)}to{text-shadow:0 0 18px var(--cc),0 0 40px rgba(0,255,65,.5)}}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes ping{0%,100%{opacity:1}50%{opacity:.2}}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+    @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+
+    /* HEADER */
+    header{text-align:center;margin-bottom:1.5rem;animation:fadeIn .5s ease}
+    .logo{font-family:'Orbitron',sans-serif;font-size:clamp(1.8rem,5vw,3rem);font-weight:900;--cc:var(--g);color:var(--cc);letter-spacing:.1em;animation:glow 2s ease-in-out infinite alternate}
+    .player-badge{display:inline-flex;align-items:center;gap:.5rem;font-size:.78rem;letter-spacing:.2em;text-transform:uppercase;padding:.35rem 1.2rem;border-radius:20px;border:1px solid;margin:.5rem auto .3rem;display:block;width:fit-content}
+    .p1-badge{color:var(--g);border-color:rgba(0,255,65,.35);background:rgba(0,255,65,.07)}
+    .p2-badge{color:var(--m);border-color:rgba(255,0,255,.35);background:rgba(255,0,255,.07)}
+    .sock-bar{display:inline-flex;align-items:center;gap:.4rem;font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;padding:.28rem .9rem;border-radius:20px;border:1px solid;transition:all .3s}
+    .sock-bar.ok{color:var(--g);border-color:rgba(0,255,65,.35);background:rgba(0,255,65,.06)}
+    .sock-bar.bad{color:var(--r);border-color:rgba(255,51,102,.35);background:rgba(255,51,102,.06)}
+    .sock-bar.wait{color:var(--a);border-color:rgba(255,170,0,.35);background:rgba(255,170,0,.06)}
+    .conn-dot{width:6px;height:6px;border-radius:50%;background:currentColor}.sock-bar.ok .conn-dot{animation:ping 1s infinite}
+
+    /* TOURNAMENT STATUS */
+    .tourn-strip{background:rgba(0,0,0,.4);border:1px solid var(--bd);border-radius:6px;padding:.7rem 1.2rem;display:flex;align-items:center;gap:1rem;margin-bottom:1.2rem;flex-wrap:wrap;font-size:.75rem}
+    .ts-label{font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;opacity:.35;margin-bottom:.15rem}
+    .ts-val{font-family:'Orbitron',sans-serif;font-size:.9rem;color:var(--g)}
+    .level-indicator{font-family:'Orbitron',sans-serif;font-size:.7rem;padding:.3rem .8rem;border-radius:20px;border:1px solid;letter-spacing:.12em;text-transform:uppercase}
+    .li-1{border-color:rgba(0,255,65,.3);color:var(--g)}
+    .li-2{border-color:rgba(0,170,255,.3);color:#00aaff}
+    .li-3{border-color:rgba(255,170,0,.3);color:var(--a)}
+    .li-4{border-color:rgba(255,0,255,.3);color:var(--m)}
+    .li-5{border-color:rgba(255,51,102,.5);color:var(--r);animation:pulse 1.5s infinite}
+
+    /* MAIN GRID */
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;animation:fadeIn .6s ease .1s both}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}}
+    .panel{background:var(--panel);border:1px solid var(--bd);border-radius:8px;padding:1.5rem;backdrop-filter:blur(10px)}
+
+    /* CHALLENGE PANEL */
+    .challenge-panel{border-left:3px solid var(--pcolor,var(--g))}
+    .cp-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+    .cp-title-row{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem}
+    .cp-title{font-family:'Orbitron',sans-serif;font-size:1.1rem;color:var(--pcolor,var(--g));letter-spacing:.05em}
+    .badge{padding:.2rem .55rem;border-radius:3px;font-size:.65rem;font-weight:700;text-transform:uppercase}
+    .easy{background:rgba(0,255,65,.15);color:var(--g)}.medium{background:rgba(255,170,0,.15);color:var(--a)}.hard{background:rgba(255,51,102,.15);color:var(--r)}
+    .cp-desc{font-size:.85rem;line-height:1.65;opacity:.85;margin-bottom:.8rem}
+    .tc-box{background:rgba(0,0,0,.3);border-radius:4px;padding:.8rem;font-size:.78rem;border-left:2px solid rgba(255,255,255,.1)}
+    .tc-header{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;opacity:.35;margin-bottom:.4rem}
+    .tc-item{opacity:.6;margin:.2rem 0;padding-left:.6rem}
+
+    /* TIMER */
+    .timer-panel{text-align:center}
+    .timer-label{font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;opacity:.35;margin-bottom:.4rem}
+    .timer-display{font-family:'Orbitron',sans-serif;font-size:3.5rem;font-weight:700;color:var(--pcolor,var(--g));line-height:1;text-shadow:0 0 20px var(--pcolor,var(--g))}
+    .timer-display.danger{color:var(--r)!important;text-shadow:0 0 20px var(--r);animation:blink .5s infinite}
+    .timer-sub{font-size:.6rem;letter-spacing:.15em;opacity:.35;margin-top:.4rem}
+    .status-row{display:flex;align-items:center;gap:.6rem;margin:.8rem 0;justify-content:center}
+    .st-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.2)}
+    .st-dot.idle{background:rgba(255,255,255,.2)}
+    .st-dot.coding{background:var(--a);box-shadow:0 0 8px var(--a);animation:ping 1s infinite}
+    .st-dot.solved{background:var(--g);box-shadow:0 0 10px var(--g)}
+    .st-dot.out{background:var(--r)}
+    .st-txt{font-size:.78rem;opacity:.6}
+    .score-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.8rem}
+    .score-box{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);border-radius:5px;padding:.6rem;text-align:center}
+    .score-val{font-family:'Orbitron',sans-serif;font-size:1.5rem;color:var(--pcolor,var(--g))}
+    .score-lbl{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;opacity:.35}
+
+    /* EDITOR */
+    .editor-panel{grid-column:1/-1}
+    .editor-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.6rem}
+    .editor-title{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--pcolor,var(--g));opacity:.7}
+    .lang-selector{display:flex;gap:.4rem;flex-wrap:wrap}
+    .lang-btn{font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:.3rem .7rem;border:1px solid var(--bd);border-radius:4px;cursor:pointer;transition:all .18s;background:transparent;color:var(--text)}
+    .lang-btn.active{border-color:var(--pcolor,var(--g));color:var(--pcolor,var(--g));background:rgba(0,255,65,.07)}
+    .lang-btn:hover:not(.active){border-color:rgba(255,255,255,.2);color:var(--text)}
+    .editor-wrap{background:#01020c;border:1px solid var(--bd);border-radius:5px;position:relative;margin-bottom:.8rem}
+    .editor-wrap textarea{width:100%;min-height:280px;background:transparent;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.88rem;resize:vertical;outline:none;line-height:1.65;padding:1rem;tab-size:2}
+    .editor-footer{display:flex;align-items:center;justify-content:space-between;padding:.4rem .8rem;background:rgba(0,0,0,.3);border-top:1px solid rgba(255,255,255,.05);border-radius:0 0 5px 5px;font-size:.65rem;opacity:.4}
+    .btn-row{display:flex;gap:.8rem}
+    .btn{flex:1;padding:.85rem;font-family:'Orbitron',sans-serif;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;border:2px solid;border-radius:5px;cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
+    .btn:disabled{opacity:.28;cursor:not-allowed}
+    .btn-run{background:rgba(0,170,255,.1);border-color:#00aaff;color:#00aaff}.btn-run:hover:not(:disabled){background:#00aaff;color:#030609;box-shadow:0 0 20px #00aaff}
+    .btn-submit{background:rgba(0,255,65,.1);border-color:var(--g);color:var(--g)}.btn-submit:hover:not(:disabled){background:var(--g);color:#030609;box-shadow:0 0 25px var(--g)}
+    .p2-color .btn-submit{background:rgba(255,0,255,.1);border-color:var(--m);color:var(--m)}.p2-color .btn-submit:hover:not(:disabled){background:var(--m);color:#030609;box-shadow:0 0 25px var(--m)}
+    .spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;margin-right:.4rem;vertical-align:middle}
+
+    /* OUTPUT */
+    .output-panel{grid-column:1/-1;animation:fadeIn .6s ease .2s both}
+    .output-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem}
+    .output-box{background:#01020c;border:1px solid var(--bd);border-radius:5px;padding:.8rem;min-height:120px;font-size:.82rem;line-height:1.65;overflow-x:auto;max-height:300px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--g) transparent}
+    .ol{margin-bottom:.35rem;opacity:0;animation:fadeIn .3s ease forwards}
+    .ok-t{color:var(--g)}.er-t{color:var(--r)}.in-t{color:#00aaff}.warn-t{color:var(--a)}
+    .test-row{background:rgba(0,0,0,.3);border-radius:4px;padding:.55rem .75rem;margin:.25rem 0;font-size:.78rem}
+    .test-row.pass{border-left:3px solid var(--g)}.test-row.fail{border-left:3px solid var(--r)}.test-row.skip{border-left:3px solid var(--a);opacity:.55}
+    .test-detail{color:rgba(255,255,255,.45);font-size:.72rem;margin-top:.25rem;padding-left:.4rem}
+    .log-line{color:rgba(255,255,255,.35);font-size:.72rem;font-style:italic;padding-left:.6rem}
+
+    /* WAITING / IDLE STATE */
+    .waiting-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1rem;text-align:center;opacity:.55}
+    .ws-icon{font-size:3rem;margin-bottom:.8rem;animation:bounce 1.5s ease infinite alternate}
+    .ws-title{font-family:'Orbitron',sans-serif;font-size:.9rem;letter-spacing:.15em;margin-bottom:.4rem}
+    .ws-sub{font-size:.75rem;opacity:.6}
+
+    /* WINNER OVERLAY */
+    .win-overlay{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.93);align-items:center;justify-content:center;flex-direction:column;gap:.9rem;text-align:center}
+    .win-overlay.show{display:flex;animation:fadeIn .4s ease}
+    .wo-trophy{font-size:5rem;animation:bounce 1.2s ease infinite alternate}
+    .wo-title{font-family:'Orbitron',sans-serif;font-size:.8rem;letter-spacing:.4em;text-transform:uppercase;opacity:.55}
+    .wo-name{font-family:'Orbitron',sans-serif;font-size:clamp(2rem,6vw,3.5rem);font-weight:900;letter-spacing:.08em;animation:glow 1.5s ease-in-out infinite alternate}
+    .wo-sub{font-size:.8rem;opacity:.45;padding:.35rem 1.2rem;border:1px solid rgba(255,255,255,.1);border-radius:20px}
+    .cc{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:501}
+    .cf{position:absolute;top:-20px;border-radius:2px;animation:fall linear forwards}
+    @keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:0}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <!-- HEADER -->
+  <header>
+    <div class="logo">CODE COMBAT</div>
+    <div id="player-badge" class="player-badge p1-badge">⚡ PLAYER 1 — SLOT 1</div>
+    <div style="text-align:center;margin-top:.4rem">
+      <span class="sock-bar wait" id="sock-bar"><span class="conn-dot"></span><span id="sock-txt">Connecting…</span></span>
+    </div>
+  </header>
+
+  <!-- TOURNAMENT STATUS STRIP -->
+  <div class="tourn-strip" id="tourn-strip">
+    <div><div class="ts-label">Level</div><div class="ts-val" id="ts-level">—</div></div>
+    <div class="level-indicator li-1" id="level-indicator">WAITING</div>
+    <div><div class="ts-label">Match</div><div class="ts-val" id="ts-match">—</div></div>
+    <div style="margin-left:auto"><div class="ts-label">Your Status</div><div class="ts-val" id="ts-status">IDLE</div></div>
+  </div>
+
+  <!-- WAITING STATE (shown before match starts) -->
+  <div id="waiting-view" class="waiting-state">
+    <div class="ws-icon">⏳</div>
+    <div class="ws-title">WAITING FOR MATCH</div>
+    <div class="ws-sub">The host will start your match soon.<br>Get ready to code!</div>
+  </div>
+
+  <!-- MATCH VIEW (shown during battle) -->
+  <div id="match-view" style="display:none">
+    <div class="grid">
+      <!-- Challenge Info -->
+      <div class="panel challenge-panel" id="challenge-panel">
+        <div class="cp-title-row">
+          <div class="cp-title" id="cp-title">Loading…</div>
+          <span class="badge easy" id="cp-diff">EASY</span>
+        </div>
+        <div class="cp-desc" id="cp-desc">—</div>
+        <div class="tc-box">
+          <div class="tc-header">Sample Inputs</div>
+          <div id="tc-list">—</div>
+        </div>
+      </div>
+
+      <!-- Timer + Status -->
+      <div class="panel timer-panel">
+        <div class="timer-label">TIME REMAINING</div>
+        <div class="timer-display" id="timer">--:--</div>
+        <div class="timer-sub">⚡ server-synced</div>
+        <div class="status-row">
+          <div class="st-dot idle" id="st-dot"></div>
+          <div class="st-txt" id="st-txt">Waiting to start…</div>
+        </div>
+        <div class="score-row">
+          <div class="score-box"><div class="score-val" id="score-solved">0</div><div class="score-lbl">Solved</div></div>
+          <div class="score-box"><div class="score-val" id="score-time">--:--</div><div class="score-lbl">Finish Time</div></div>
+        </div>
+      </div>
+
+      <!-- Code Editor -->
+      <div class="panel editor-panel" id="editor-panel">
+        <div class="editor-header">
+          <span class="editor-title">// CODE EDITOR</span>
+          <div class="lang-selector" id="lang-selector">
+            <button class="lang-btn active" data-lang="javascript" onclick="setLang('javascript')">JavaScript</button>
+            <button class="lang-btn" data-lang="python" onclick="setLang('python')">Python</button>
+            <button class="lang-btn" data-lang="cpp" onclick="setLang('cpp')">C++</button>
+            <button class="lang-btn" data-lang="c" onclick="setLang('c')">C</button>
+          </div>
+        </div>
+        <div class="editor-wrap">
+          <textarea id="code-editor" spellcheck="false" placeholder="// Your solution here…"></textarea>
+          <div class="editor-footer">
+            <span id="char-count">0 chars</span>
+            <span id="lang-label">JavaScript</span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-run" id="btn-run" disabled onclick="runCode()">▷ RUN</button>
+          <button class="btn btn-submit" id="btn-submit" disabled onclick="submitCode()">✓ SUBMIT</button>
+        </div>
+      </div>
+
+      <!-- Output -->
+      <div class="panel output-panel">
+        <div class="output-header">
+          <span style="font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;opacity:.5">// OUTPUT</span>
+          <button onclick="$('output-box').innerHTML=''" style="font-size:.6rem;background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:.18rem .5rem;cursor:pointer;color:var(--text);opacity:.4">CLEAR</button>
+        </div>
+        <div class="output-box" id="output-box">
+          <div class="ol in-t">Ready. Write your solution and press RUN to test.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WINNER OVERLAY -->
+<div class="win-overlay" id="win-overlay">
+  <div class="cc" id="win-conf"></div>
+  <div class="wo-trophy" id="wo-trophy">🏆</div>
+  <div class="wo-title" id="wo-title">WINNER</div>
+  <div class="wo-name" id="wo-name" style="--cc:var(--g);color:var(--g)">—</div>
+  <div class="wo-sub" id="wo-sub">—</div>
+  <button onclick="document.getElementById('win-overlay').classList.remove('show')" style="margin-top:.5rem;font-family:Orbitron,sans-serif;font-size:.7rem;padding:.5rem 1.5rem;border:1px solid rgba(255,255,255,.2);border-radius:4px;cursor:pointer;background:transparent;color:var(--text);letter-spacing:.1em">DISMISS</button>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// SLOT DETECTION
+// ══════════════════════════════════════════════════
+const params = new URLSearchParams(location.search);
+const SLOT   = params.get('slot') || '1';
+const IS_P2  = SLOT === '2';
+
+const $ = id => document.getElementById(id);
+$('player-badge').className = `player-badge ${IS_P2?'p2-badge':'p1-badge'}`;
+$('player-badge').textContent = `⚡ PLAYER ${SLOT} — SLOT ${SLOT}`;
+if (IS_P2) $('editor-panel').classList.add('p2-color');
+
+document.documentElement.style.setProperty('--pcolor', IS_P2 ? 'var(--m)' : 'var(--g)');
+document.querySelector('.challenge-panel').style.setProperty('--pcolor', IS_P2 ? 'var(--m)' : 'var(--g)');
+
+// ══════════════════════════════════════════════════
+// SOCKET
+// ══════════════════════════════════════════════════
+const socket = io({ query: { role: `player${SLOT}` } });
+
+socket.on('connect', () => { sockStatus('ok'); socket.emit('player_connected', { slot: SLOT }); });
+socket.on('disconnect', () => sockStatus('bad'));
+socket.on('connect_error', () => sockStatus('bad'));
+sockStatus('wait');
+
+function sockStatus(s) {
+  const el = $('sock-bar');
+  el.className = `sock-bar ${s}`;
+  $('sock-txt').textContent = {ok:`PLAYER ${SLOT} ONLINE`,bad:'OFFLINE',wait:'Connecting…'}[s]||s;
+}
+
+// ══════════════════════════════════════════════════
+// TOURNAMENT STATE
+// ══════════════════════════════════════════════════
+const LEVEL_NAMES = {1:'CODE COMBAT',2:'KNOCKOUT',3:'ADV. KNOCKOUT',4:'SEMI-FINAL',5:'FINAL BATTLE'};
+let currentLevel = 0, currentMatchNum = 0;
+
+socket.on('tournament_state', (st) => {
+  if (!st?.started) return;
+  currentLevel = st.level;
+  $('ts-level').textContent = st.level ? `${st.level} — ${LEVEL_NAMES[st.level]||''}` : '—';
+  const liCls = `level-indicator li-${Math.min(st.level,5)}`;
+  $('level-indicator').className = liCls;
+  $('level-indicator').textContent = LEVEL_NAMES[st.level]||'WAITING';
+});
+
+socket.on('match_active', ({ matchNum, level, p1, p2 }) => {
+  currentMatchNum = matchNum;
+  $('ts-match').textContent = `#${matchNum}`;
+  showMatchView();
+});
+
+// ══════════════════════════════════════════════════
+// CHALLENGE SETUP
+// ══════════════════════════════════════════════════
+let currentChallenge = null;
+let currentLang = 'javascript';
+let challengeTemplates = {};
+
+socket.on('setup', ({ p1Name, p2Name, challengeData, timeLimit }) => {
+  if (!challengeData) return;
+  currentChallenge = challengeData;
+  challengeTemplates = challengeData.template || {};
+
+  $('cp-title').textContent = challengeData.title;
+  $('cp-desc').textContent  = challengeData.desc;
+  $('cp-diff').textContent  = challengeData.difficulty.toUpperCase();
+  $('cp-diff').className    = `badge ${challengeData.difficulty}`;
+
+  // Test inputs
+  const inputs = challengeData.testInputs || [];
+  $('tc-list').innerHTML = inputs.slice(0,4).map(inp =>
+    `<div class="tc-item">→ ${JSON.stringify(inp)}</div>`
+  ).join('');
+
+  // Timer
+  fmtTimer(timeLimit);
+
+  // Load template for current language
+  loadTemplate();
+  showMatchView();
+});
+
+socket.on('state_sync', (st) => {
+  if (!st?.challengeData) return;
+  currentChallenge = st.challengeData;
+  challengeTemplates = st.challengeData.template || {};
+  $('cp-title').textContent = st.challengeData.title;
+  $('cp-desc').textContent  = st.challengeData.desc;
+  $('cp-diff').textContent  = (st.challengeData.difficulty||'').toUpperCase();
+  $('cp-diff').className    = `badge ${st.challengeData.difficulty}`;
+  const inputs = st.challengeData.testInputs || [];
+  $('tc-list').innerHTML = inputs.slice(0,4).map(inp=>`<div class="tc-item">→ ${JSON.stringify(inp)}</div>`).join('');
+  fmtTimer(st.timers?.[SLOT==='1'?'p1':'p2'] || 0);
+  if (st.challengeData) showMatchView();
+  loadTemplate();
+});
+
+// ══════════════════════════════════════════════════
+// LANGUAGE SELECTOR
+// ══════════════════════════════════════════════════
+function setLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang===lang));
+  $('lang-label').textContent = lang;
+  loadTemplate();
+}
+
+function loadTemplate() {
+  if (!challengeTemplates) return;
+  const t = challengeTemplates[currentLang];
+  if (t && !$('code-editor').value.trim()) {
+    $('code-editor').value = t;
+    updateCharCount();
+  }
+}
+
+// ══════════════════════════════════════════════════
+// TIMER
+// ══════════════════════════════════════════════════
+function fmt(s) { return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+function fmtTimer(s) { $('timer').textContent = fmt(s); }
+
+socket.on('timer_tick', ({ player, remaining, danger }) => {
+  const myPlayer = SLOT === '1' ? 'p1' : 'p2';
+  if (player !== myPlayer) return;
+  fmtTimer(remaining);
+  $('timer').classList.toggle('danger', danger);
+});
+
+socket.on('battle_start', ({ timeLimit }) => {
+  fmtTimer(timeLimit);
+  $('btn-run').disabled    = false;
+  $('btn-submit').disabled = false;
+  setStatus('coding');
+  addOutput('⚡ Battle started! Write your solution.', 'in-t');
+});
+
+socket.on('battle_pause', () => addOutput('⏸ Battle paused.', 'warn-t'));
+socket.on('battle_resume', () => addOutput('▶ Battle resumed!', 'in-t'));
+socket.on('battle_reset', ({ timeLimit }) => {
+  fmtTimer(timeLimit);
+  $('btn-run').disabled=$('btn-submit').disabled=true;
+  setStatus('idle');
+  $('output-box').innerHTML='';
+  addOutput('Battle reset. Waiting for host to start.','in-t');
+});
+
+// ══════════════════════════════════════════════════
+// STATUS
+// ══════════════════════════════════════════════════
+function setStatus(st) {
+  $('st-dot').className = `st-dot ${st}`;
+  $('st-txt').textContent = {idle:'Waiting to start…',coding:'Coding in progress…',solved:'Solved! ✓',out:'Time expired ✗'}[st]||'';
+  $('ts-status').textContent = st.toUpperCase();
+}
+
+socket.on('player_solved', ({ player, timeUsed }) => {
+  const myPlayer = SLOT==='1'?'p1':'p2';
+  if (player === myPlayer) {
+    setStatus('solved');
+    $('score-solved').textContent = '1';
+    $('score-time').textContent   = fmt(timeUsed);
+    $('btn-run').disabled=$('btn-submit').disabled=true;
+    addOutput(`✅ All test cases passed! Time used: ${fmt(timeUsed)}`, 'ok-t');
+  }
+});
+
+socket.on('player_out', ({ player }) => {
+  const myPlayer = SLOT==='1'?'p1':'p2';
+  if (player === myPlayer) {
+    setStatus('out');
+    $('btn-run').disabled=$('btn-submit').disabled=true;
+    fmtTimer(0);
+    addOutput('⏰ Time expired!', 'er-t');
+  }
+});
+
+// ══════════════════════════════════════════════════
+// CODE EDITOR
+// ══════════════════════════════════════════════════
+const editor = $('code-editor');
+let lastCode='', debounceTimer=null;
+
+editor.addEventListener('input', () => {
+  const code = editor.value;
+  updateCharCount();
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    if (code !== lastCode) {
+      socket.emit('code_update', { slot: SLOT, code, language: currentLang });
+      lastCode = code;
+    }
+  }, 200);
+});
+
+editor.addEventListener('keydown', (e) => {
+  if (e.key==='Tab') {
+    e.preventDefault();
+    const s=editor.selectionStart, en=editor.selectionEnd;
+    editor.value=editor.value.substring(0,s)+'  '+editor.value.substring(en);
+    editor.selectionStart=editor.selectionEnd=s+2;
+    editor.dispatchEvent(new Event('input'));
+  }
+});
+
+function updateCharCount() {
+  $('char-count').textContent = `${editor.value.length} chars · ${editor.value.split('\n').length} lines`;
+}
+
+// ══════════════════════════════════════════════════
+// RUN / SUBMIT
+// ══════════════════════════════════════════════════
+let submitting=false;
+
+function runCode() {
+  if (submitting) return;
+  const code=editor.value.trim();
+  if (!code){addOutput('Write some code first!','warn-t');return}
+  submitting=true;
+  $('btn-run').innerHTML='<span class="spin"></span>RUNNING…';
+  $('btn-run').disabled=true;
+  socket.emit('submit_code',{slot:SLOT,code,language:currentLang,isRun:true});
+}
+
+function submitCode() {
+  if (submitting) return;
+  const code=editor.value.trim();
+  if (!code){addOutput('Write some code first!','warn-t');return}
+  submitting=true;
+  $('btn-submit').innerHTML='<span class="spin"></span>SUBMITTING…';
+  $('btn-submit').disabled=true;
+  socket.emit('submit_code',{slot:SLOT,code,language:currentLang,isRun:false});
+}
+
+socket.on('eval_result',({slot,isRun,allPassed,syntaxError,totalTimeMs,results,error})=>{
+  if (slot !== SLOT) return;
+  submitting=false;
+  $('btn-run').innerHTML='▷ RUN'; $('btn-run').disabled=false;
+  $('btn-submit').innerHTML='✓ SUBMIT'; $('btn-submit').disabled=false;
+
+  if (error){addOutput(`❌ ${error}`,'er-t');return}
+  if (syntaxError){addOutput(`🔴 Syntax Error: ${syntaxError}`,'er-t');return}
+
+  const verb = isRun ? 'Test Run' : 'Submission';
+  const passed = results.filter(r=>r.passed).length;
+  addOutput(`${isRun?'▷':'✓'} ${verb} — ${passed}/${results.length} passed (${totalTimeMs}ms)`, allPassed?'ok-t':'er-t');
+
+  results.forEach(r=>{
+    const cls=r.passed?'pass':r.reason==='skipped'?'skip':'fail';
+    const icon=r.passed?'✓':r.reason==='skipped'?'⏭':'✗';
+    let html=`<div class="test-row ${cls}"><strong>${icon} Test ${r.testNum}</strong> — ${r.passed?'Passed':'Failed'}`;
+    if (!r.passed&&r.reason!=='skipped') {
+      html+=`<div class="test-detail">Input: ${r.inputStr}</div>`;
+      html+=`<div class="test-detail">Expected: <span style="color:var(--g)">${r.expectedStr}</span></div>`;
+      html+=`<div class="test-detail">Got: <span style="color:var(--r)">${r.actualStr}</span></div>`;
+      if(r.error) html+=`<div class="test-detail" style="color:var(--r)">Error: ${r.error}</div>`;
+    }
+    if(r.logs?.length) r.logs.forEach(l=>{html+=`<div class="log-line">console: ${l}</div>`});
+    html+='</div>';
+    const el=document.createElement('div');el.innerHTML=html;
+    $('output-box').appendChild(el.firstChild);
+  });
+  $('output-box').scrollTop=$('output-box').scrollHeight;
+});
+
+// ══════════════════════════════════════════════════
+// WINNER
+// ══════════════════════════════════════════════════
+socket.on('winner',({winner,p1Name,p2Name,finishTime,hostDeclared})=>{
+  const myPlayer=SLOT==='1'?'p1':'p2';
+  const iWon=winner===myPlayer;
+  const wn=(winner==='p1'?p1Name:p2Name||'?').toUpperCase();
+  const wc=iWon?(SLOT==='1'?'var(--g)':'var(--m)'):'var(--r)';
+  $('wo-trophy').textContent=iWon?'🏆':'💀';
+  $('wo-title').textContent=iWon?(hostDeclared?'HOST DECLARED':'WINNER'):'ELIMINATED';
+  $('wo-name').textContent=wn;$('wo-name').style.color=wc;
+  $('wo-sub').textContent=iWon?`You solved it in ${fmt(finishTime?.[myPlayer]||0)} ⚡`:'Better luck next time!';
+  $('win-overlay').classList.add('show');
+  if(iWon) spawnConfetti($('win-conf'),true,wc);
+});
+
+// ══════════════════════════════════════════════════
+// VIEWS
+// ══════════════════════════════════════════════════
+function showMatchView(){
+  $('waiting-view').style.display='none';
+  $('match-view').style.display='';
+}
+
+// ══════════════════════════════════════════════════
+// OUTPUT HELPER
+// ══════════════════════════════════════════════════
+function addOutput(msg, cls=''){
+  const el=document.createElement('div');
+  el.className=`ol ${cls}`;
+  el.textContent=msg;
+  $('output-box').appendChild(el);
+  $('output-box').scrollTop=$('output-box').scrollHeight;
+}
+
+// ══════════════════════════════════════════════════
+// CONFETTI
+// ══════════════════════════════════════════════════
+function spawnConfetti(container,ok,color){
+  container.innerHTML='';
+  if(!ok)return;
+  const cols=color?.includes('ff00ff')?['#ff00ff','#cc00cc','#ffaaff']:['#00ff41','#00cc33','#80ffb0','#fff'];
+  for(let i=0;i<60;i++){
+    const el=document.createElement('div');el.className='cf';
+    el.style.cssText=`left:${Math.random()*100}vw;background:${cols[Math.floor(Math.random()*cols.length)]};width:${4+Math.random()*5}px;height:${4+Math.random()*7}px;animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()}s`;
+    container.appendChild(el);
+  }
+}
+</script>
+</body>
+</html>

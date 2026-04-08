@@ -1,0 +1,40 @@
+version: "3.9"
+services:
+  app:
+    build: { context: ., dockerfile: Dockerfile, target: runner }
+    image: code-combat:latest
+    container_name: code-combat-app
+    restart: unless-stopped
+    ports: ["${PORT:-3000}:3000"]
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    env_file: [.env]
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks: [combat-net]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  # Uncomment when deploying with domain + SSL
+  # nginx:
+  #   image: nginx:1.25-alpine
+  #   container_name: code-combat-nginx
+  #   restart: unless-stopped
+  #   ports: ["80:80","443:443"]
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  #     - ./ssl/cert.pem:/etc/nginx/ssl/cert.pem:ro
+  #     - ./ssl/key.pem:/etc/nginx/ssl/key.pem:ro
+  #   depends_on:
+  #     app: {condition: service_healthy}
+  #   networks: [combat-net]
+
+networks:
+  combat-net: {driver: bridge}

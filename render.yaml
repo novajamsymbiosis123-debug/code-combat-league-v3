@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: code-combat
+    runtime: node
+    region: oregon
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /health
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CORS_ORIGIN
+        value: https://code-combat.onrender.com

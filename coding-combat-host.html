@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CODE COMBAT LEAGUE // ADMIN HOST</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet"/>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --g:#00ff41;--m:#ff00ff;--r:#ff3366;--a:#ffaa00;--b:#00aaff;
+      --bg:#030609;--panel:rgba(6,12,24,.9);--border:rgba(0,255,65,.18);
+      --text:#c8d8e8;--dim:rgba(200,216,232,.4);
+    }
+    html,body{height:100%;font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);overflow-x:hidden}
+    /* Grid background */
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+      background-image:linear-gradient(rgba(0,255,65,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,65,.03) 1px,transparent 1px);
+      background-size:40px 40px}
+    body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,.015) 2px,rgba(0,255,65,.015) 3px)}
+
+    @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes glow{from{text-shadow:0 0 10px var(--g),0 0 25px rgba(0,255,65,.3)}to{text-shadow:0 0 20px var(--g),0 0 50px rgba(0,255,65,.5)}}
+    @keyframes ping{0%,100%{opacity:1}50%{opacity:.15}}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+    @keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:0}}
+    @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-12px)}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+
+    /* ── SCREENS ── */
+    .screen{display:none;position:relative;z-index:10;min-height:100vh}
+    .screen.active{display:block}
+
+    /* ── SHARED ── */
+    .logo{font-family:'Orbitron',sans-serif;font-weight:900;color:var(--g);letter-spacing:.1em;animation:glow 2s ease-in-out infinite alternate}
+    .badge{padding:.2rem .6rem;border-radius:3px;font-size:.68rem;font-weight:700;text-transform:uppercase}
+    .easy{background:rgba(0,255,65,.15);color:var(--g)}.medium{background:rgba(255,170,0,.15);color:var(--a)}.hard{background:rgba(255,51,102,.15);color:var(--r)}
+    .btn{padding:.7rem 1.5rem;font-family:'Orbitron',sans-serif;font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border:2px solid;border-radius:5px;cursor:pointer;transition:all .2s}
+    .btn:disabled{opacity:.25;cursor:not-allowed;pointer-events:none}
+    .btn-g{background:rgba(0,255,65,.1);border-color:var(--g);color:var(--g)}.btn-g:hover:not(:disabled){background:var(--g);color:#030609;box-shadow:0 0 20px var(--g)}
+    .btn-m{background:rgba(255,0,255,.1);border-color:var(--m);color:var(--m)}.btn-m:hover:not(:disabled){background:var(--m);color:#030609}
+    .btn-r{background:rgba(255,51,102,.1);border-color:var(--r);color:var(--r)}.btn-r:hover:not(:disabled){background:var(--r);color:#fff}
+    .btn-a{background:rgba(255,170,0,.1);border-color:var(--a);color:var(--a)}.btn-a:hover:not(:disabled){background:var(--a);color:#030609}
+    .btn-ghost{background:transparent;border-color:var(--border);color:var(--dim)}.btn-ghost:hover:not(:disabled){border-color:var(--text);color:var(--text)}
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;backdrop-filter:blur(12px)}
+    .conn-dot{width:7px;height:7px;border-radius:50%;background:currentColor}.conn-dot.live{animation:ping 1s infinite}
+    label{font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--g);opacity:.7;display:block;margin-bottom:.4rem}
+    input,select,textarea{background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.88rem;padding:.6rem .9rem;outline:none;transition:border-color .2s;width:100%}
+    input:focus,select:focus,textarea:focus{border-color:var(--g);box-shadow:0 0 0 2px rgba(0,255,65,.1)}
+    select option{background:#050a10}
+    h2{font-family:'Orbitron',sans-serif;font-size:1.1rem;color:var(--g);letter-spacing:.1em;margin-bottom:1rem}
+    h3{font-family:'Orbitron',sans-serif;font-size:.9rem;color:var(--a);letter-spacing:.08em;margin-bottom:.7rem}
+
+    /* ─────────────────────────────────────────────
+       SCREEN 1: PLAYER ENTRY
+    ───────────────────────────────────────────── */
+    #s-entry{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;min-height:100vh;animation:fadeUp .5s ease}
+    .entry-logo{font-size:clamp(2rem,5vw,3.5rem);margin-bottom:.4rem;text-align:center}
+    .entry-sub{font-size:.75rem;letter-spacing:.4em;color:var(--m);opacity:.7;text-align:center;margin-bottom:.5rem}
+    .entry-tag{font-size:.65rem;letter-spacing:.3em;color:var(--a);opacity:.6;text-align:center;margin-bottom:2rem}
+    .entry-card{width:100%;max-width:860px;padding:2rem}
+    .entry-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.8rem}
+    .player-count-badge{font-size:.75rem;padding:.4rem 1rem;border-radius:20px;border:1px solid rgba(0,255,65,.3);color:var(--g);background:rgba(0,255,65,.07);letter-spacing:.15em}
+    .players-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.6rem;max-height:340px;overflow-y:auto;padding-right:.3rem;margin-bottom:1.5rem;scrollbar-width:thin;scrollbar-color:var(--g) transparent}
+    .player-slot{display:flex;align-items:center;gap:.5rem;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:5px;padding:.5rem .8rem;transition:border-color .2s}
+    .player-slot.filled{border-color:rgba(0,255,65,.3);background:rgba(0,255,65,.04)}
+    .slot-num{font-size:.65rem;color:var(--g);opacity:.4;min-width:28px;font-weight:700}
+    .slot-input{background:transparent;border:none;color:var(--text);font-size:.82rem;padding:.1rem 0;outline:none;width:100%}
+    .slot-input::placeholder{opacity:.25}
+    .bulk-area textarea{min-height:80px;font-size:.8rem;resize:vertical}
+    .divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:1.2rem 0}
+    .entry-actions{display:flex;gap:.8rem;flex-wrap:wrap}
+    .entry-info{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.7rem;margin-bottom:1.5rem}
+    .info-box{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:5px;padding:.8rem 1rem;text-align:center}
+    .info-num{font-family:'Orbitron',sans-serif;font-size:1.8rem;color:var(--g)}
+    .info-lbl{font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;opacity:.4;margin-top:.2rem}
+
+    /* ─────────────────────────────────────────────
+       SCREEN 2: TOURNAMENT OVERVIEW + BRACKET
+    ───────────────────────────────────────────── */
+    #s-tournament{padding:1.5rem}
+    .top-bar{display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem;flex-wrap:wrap}
+    .top-logo{font-size:1.3rem}
+    .level-badge{font-family:'Orbitron',sans-serif;font-size:.72rem;letter-spacing:.2em;padding:.3rem 1rem;border-radius:20px;border:1px solid;text-transform:uppercase}
+    .level-badge.l1{border-color:rgba(0,255,65,.4);color:var(--g);background:rgba(0,255,65,.08)}
+    .level-badge.l2{border-color:rgba(0,170,255,.4);color:var(--b);background:rgba(0,170,255,.08)}
+    .level-badge.l3{border-color:rgba(255,170,0,.4);color:var(--a);background:rgba(255,170,0,.08)}
+    .level-badge.l4{border-color:rgba(255,0,255,.4);color:var(--m);background:rgba(255,0,255,.08)}
+    .level-badge.l5{border-color:rgba(255,51,102,.4);color:var(--r);background:rgba(255,51,102,.08);animation:pulse 1.5s infinite}
+    .sock-pill{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;padding:.25rem .7rem;border-radius:20px;border:1px solid;display:flex;align-items:center;gap:.35rem}
+    .sock-pill.ok{border-color:rgba(0,255,65,.35);color:var(--g);background:rgba(0,255,65,.07)}
+    .sock-pill.bad{border-color:rgba(255,51,102,.35);color:var(--r);background:rgba(255,51,102,.07)}
+
+    .tournament-layout{display:grid;grid-template-columns:300px 1fr;gap:1.2rem;align-items:start}
+    @media(max-width:900px){.tournament-layout{grid-template-columns:1fr}}
+
+    /* SIDEBAR */
+    .sidebar .panel{padding:1.2rem;margin-bottom:.8rem}
+    .progress-bar-wrap{background:rgba(0,0,0,.4);border-radius:3px;height:6px;overflow:hidden;margin:.4rem 0}
+    .progress-bar{height:100%;background:linear-gradient(90deg,var(--g),var(--m));border-radius:3px;transition:width .5s ease}
+    .stat-row{display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.78rem}
+    .stat-row:last-child{border-bottom:none}
+    .stat-val{color:var(--g);font-weight:700}
+
+    /* MATCH LIST */
+    .match-list{padding:1.2rem}
+    .match-controls{display:flex;gap:.7rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
+    .match-cards{display:flex;flex-direction:column;gap:.6rem;max-height:420px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--g) transparent}
+    .match-card{background:rgba(0,0,0,.35);border:1px solid var(--border);border-radius:6px;padding:.9rem 1.1rem;display:grid;grid-template-columns:auto 1fr auto;gap:.7rem;align-items:center;transition:border-color .2s;animation:slideIn .3s ease}
+    .match-card.active{border-color:var(--g);background:rgba(0,255,65,.04);box-shadow:0 0 15px rgba(0,255,65,.08)}
+    .match-card.done{opacity:.5}
+    .match-card.bye{border-color:rgba(0,170,255,.3);background:rgba(0,170,255,.04)}
+    .mc-num{font-family:'Orbitron',sans-serif;font-size:.75rem;color:var(--dim);letter-spacing:.1em;min-width:44px;text-align:center}
+    .mc-players{font-size:.82rem}
+    .mc-p1{color:var(--g)}.mc-vs{color:var(--dim);margin:0 .5rem;font-size:.7rem}.mc-p2{color:var(--m)}
+    .mc-prob{font-size:.68rem;color:var(--dim);margin-top:.2rem}
+    .mc-status{font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;padding:.2rem .6rem;border-radius:3px}
+    .mc-status.pending{color:var(--dim);border:1px solid var(--border)}
+    .mc-status.active{color:var(--g);border:1px solid rgba(0,255,65,.4);background:rgba(0,255,65,.08);animation:ping 1s infinite}
+    .mc-status.done{color:#555;border:1px solid #333}
+    .bye-label{color:var(--b);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase}
+
+    /* LEVELS NAV */
+    .levels-nav{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap}
+    .level-nav-btn{font-family:'Orbitron',sans-serif;font-size:.65rem;padding:.3rem .8rem;border-radius:4px;border:1px solid var(--border);color:var(--dim);background:transparent;cursor:pointer;transition:all .2s;letter-spacing:.1em}
+    .level-nav-btn.current{border-color:var(--g);color:var(--g);background:rgba(0,255,65,.08)}
+    .level-nav-btn.done{border-color:#333;color:#555}
+
+    /* LEADERBOARD */
+    .leaderboard{padding:1.2rem}
+    .lb-row{display:grid;grid-template-columns:30px 1fr repeat(3,60px);gap:.5rem;align-items:center;padding:.5rem .4rem;border-bottom:1px solid rgba(255,255,255,.04);font-size:.78rem;transition:background .2s}
+    .lb-row:hover{background:rgba(255,255,255,.02)}
+    .lb-row.header{font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--border);padding-bottom:.6rem}
+    .lb-rank{color:var(--a);font-weight:700;text-align:center}
+    .lb-rank.gold{color:#ffd700;font-size:1rem}.lb-rank.silver{color:#c0c0c0}.lb-rank.bronze{color:#cd7f32}
+    .lb-name{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .lb-w{color:var(--g);text-align:center}.lb-l{color:var(--r);text-align:center}.lb-bye{color:var(--b);text-align:center}
+    .lb-status{font-size:.62rem;letter-spacing:.1em;padding:.15rem .45rem;border-radius:3px}
+    .lb-status.active{color:var(--g);border:1px solid rgba(0,255,65,.3)}.lb-status.eliminated{color:#444}.lb-status.champion{color:var(--a);animation:glow 1.5s infinite alternate}
+
+    /* ─────────────────────────────────────────────
+       SCREEN 3: LIVE BATTLE
+    ───────────────────────────────────────────── */
+    #s-battle{padding:1.4rem 1.6rem;min-height:100vh}
+    .battle-header{display:flex;align-items:center;gap:.8rem;margin-bottom:1rem;flex-wrap:wrap}
+    .battle-title{font-family:'Orbitron',sans-serif;font-size:1.25rem;color:var(--g)}
+    .battle-match-info{font-size:.7rem;color:var(--a);letter-spacing:.15em;text-transform:uppercase}
+    .ch-strip{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:.8rem 1.2rem;display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+    .ch-title{font-size:.9rem;color:var(--g);font-weight:700}.ch-desc{font-size:.75rem;opacity:.7;flex:1;min-width:150px}
+
+    .arena{display:grid;grid-template-columns:1fr auto 1fr;gap:1rem;align-items:start}
+    @media(max-width:800px){.arena{grid-template-columns:1fr}.vs-col{display:flex;flex-direction:row;padding:0;gap:.5rem}}
+
+    /* PLAYER CARD */
+    .pc{border:2px solid var(--border);border-radius:10px;padding:1.4rem;position:relative;overflow:hidden;transition:border-color .3s,box-shadow .3s}
+    .pc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--cc,var(--g));box-shadow:0 0 12px var(--cc,var(--g))}
+    .pc.p1c{--cc:var(--g)}.pc.p2c{--cc:var(--m)}
+    .pc.solved{border-color:var(--cc)}.pc.out{opacity:.5;filter:saturate(.3)}
+    .ph{display:flex;align-items:center;gap:.8rem;margin-bottom:1rem}
+    .av{width:42px;height:42px;border-radius:50%;border:2px solid var(--cc);display:flex;align-items:center;justify-content:center;font-size:1.2rem;background:rgba(0,0,0,.4);flex-shrink:0}
+    .pn{font-family:'Orbitron',sans-serif;font-size:1.1rem;font-weight:700;color:var(--cc)}
+    .pr{font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;opacity:.35}
+    .tb{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.05);border-radius:6px;padding:1rem;text-align:center;margin-bottom:.9rem}
+    .tl{font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;opacity:.35;margin-bottom:.3rem}
+    .tv{font-family:'Orbitron',sans-serif;font-size:2.8rem;color:var(--cc);line-height:1;letter-spacing:.05em;text-shadow:0 0 15px var(--cc)}
+    .tv.danger{color:var(--r)!important;text-shadow:0 0 15px var(--r);animation:blink .5s infinite}
+    .sr{display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem}
+    .sd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .sd.idle{background:rgba(255,255,255,.2)}.sd.coding{background:var(--a);box-shadow:0 0 6px var(--a);animation:ping 1s infinite}
+    .sd.p2cod{background:var(--m);box-shadow:0 0 6px var(--m);animation:ping 1s infinite}.sd.solved{background:var(--g);box-shadow:0 0 8px var(--g)}.sd.out{background:var(--r)}
+    .st{font-size:.78rem;opacity:.6}
+    .ms{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.8rem}
+    .msc{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);border-radius:5px;padding:.5rem .8rem;text-align:center}
+    .msv{font-family:'Orbitron',sans-serif;font-size:1.3rem;color:var(--cc)}.msl{font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;opacity:.35;margin-top:.1rem}
+    .lcw{margin-bottom:.8rem}
+    .lch{display:flex;align-items:center;justify-content:space-between;margin-bottom:.35rem}
+    .lcl{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--cc);opacity:.7;display:flex;align-items:center;gap:.35rem}
+    .ld{width:5px;height:5px;border-radius:50%;background:var(--cc);box-shadow:0 0 5px var(--cc);animation:ping 1.2s infinite}
+    .ld.off{animation:none;opacity:.15}
+    .lcc{font-size:.6rem;opacity:.3}
+    .lcb{background:#01020a;border:1px solid rgba(255,255,255,.05);border-left:3px solid var(--cc);border-radius:0 5px 5px 0;height:180px;overflow-y:auto;font-size:.72rem;line-height:1.65;scrollbar-width:thin;scrollbar-color:var(--cc) transparent}
+    .lcb::-webkit-scrollbar{width:2px}.lcb::-webkit-scrollbar-thumb{background:var(--cc)}
+    .ct{display:table;width:100%;padding:.5rem 0}.cr{display:table-row}
+    .ln{display:table-cell;width:30px;text-align:right;padding-right:.5rem;padding-left:.3rem;color:var(--cc);opacity:.18;font-size:.66rem;vertical-align:top;user-select:none}
+    .lc2{display:table-cell;white-space:pre-wrap;word-break:break-all;color:var(--text);padding-right:.5rem;vertical-align:top}
+    .kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cmt{color:#3a5060;font-style:italic}
+    .cur{display:inline-block;width:2px;height:.88em;background:var(--cc);margin-left:1px;vertical-align:text-bottom;animation:blink .8s step-end infinite}
+    .nc{color:rgba(255,255,255,.15);font-style:italic;padding:.8rem 1rem;font-size:.72rem}
+    .ca{display:flex;gap:.5rem}
+    .ba{flex:1;padding:.55rem;font-family:'Orbitron',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border:2px solid;border-radius:4px;cursor:pointer;transition:all .18s}
+    .bs{background:rgba(0,255,65,.1);border-color:var(--g);color:var(--g)}.bs:hover:not(:disabled){background:var(--g);color:#030609;box-shadow:0 0 14px var(--g)}
+    .p2c .bs{background:rgba(255,0,255,.1);border-color:var(--m);color:var(--m)}.p2c .bs:hover:not(:disabled){background:var(--m);color:#030609}
+    .bf{background:rgba(255,51,102,.1);border-color:var(--r);color:var(--r)}.bf:hover:not(:disabled){background:var(--r);color:#fff}
+    .ba:disabled{opacity:.22;cursor:not-allowed}
+
+    /* VS col */
+    .vs-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.8rem;padding-top:2.5rem;min-width:60px}
+    .vst{font-family:'Orbitron',sans-serif;font-size:1.6rem;font-weight:900;background:linear-gradient(135deg,var(--g),var(--m));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .vsl{width:1px;height:60px;background:linear-gradient(to bottom,transparent,var(--border),transparent)}
+
+    /* HOST CONTROLS */
+    .hc{display:flex;align-items:center;justify-content:center;gap:.8rem;margin-top:1rem;flex-wrap:wrap}
+
+    /* FINAL DECLARE */
+    .final-declare{background:rgba(255,170,0,.05);border:2px solid rgba(255,170,0,.3);border-radius:8px;padding:1rem 1.5rem;margin-top:1rem;text-align:center}
+    .final-declare h3{color:var(--a);margin-bottom:.8rem;font-size:.85rem}
+    .final-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+    .declare-p1{padding:.8rem 2rem;font-family:'Orbitron',sans-serif;font-size:.8rem;font-weight:700;letter-spacing:.1em;border:2px solid var(--g);color:var(--g);border-radius:5px;cursor:pointer;transition:all .2s;background:rgba(0,255,65,.1)}
+    .declare-p1:hover{background:var(--g);color:#030609;box-shadow:0 0 25px var(--g)}
+    .declare-p2{padding:.8rem 2rem;font-family:'Orbitron',sans-serif;font-size:.8rem;font-weight:700;letter-spacing:.1em;border:2px solid var(--m);color:var(--m);border-radius:5px;cursor:pointer;transition:all .2s;background:rgba(255,0,255,.1)}
+    .declare-p2:hover{background:var(--m);color:#030609;box-shadow:0 0 25px var(--m)}
+
+    /* ─────────────────────────────────────────────
+       WINNER OVERLAY
+    ───────────────────────────────────────────── */
+    #wo{display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.94);align-items:center;justify-content:center;flex-direction:column;gap:1rem}
+    #wo.active{display:flex;animation:fadeUp .4s ease}
+    .wc{font-size:4rem;animation:bounce 1s ease infinite alternate}
+    .wl{font-family:'Orbitron',sans-serif;font-size:.8rem;letter-spacing:.4em;text-transform:uppercase;color:var(--g);opacity:.6}
+    .wn{font-family:'Orbitron',sans-serif;font-size:clamp(2rem,6vw,4rem);font-weight:900;letter-spacing:.08em;animation:glow 1.5s ease-in-out infinite alternate}
+    .wt{font-size:.88rem;opacity:.5;background:rgba(0,255,65,.07);border:1px solid var(--border);padding:.4rem 1.2rem;border-radius:20px}
+    .w-next-info{font-size:.75rem;color:var(--a);opacity:.7;letter-spacing:.1em}
+    .wo-btns{display:flex;gap:.8rem;margin-top:.5rem;flex-wrap:wrap;justify-content:center}
+    .cc{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:601}
+    .cf{position:absolute;top:-20px;border-radius:2px;animation:fall linear forwards}
+
+    /* ─────────────────────────────────────────────
+       CHAMPION SCREEN
+    ───────────────────────────────────────────── */
+    #s-champion{display:none;position:fixed;inset:0;z-index:700;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:1.2rem;text-align:center}
+    #s-champion.active{display:flex;animation:fadeUp .6s ease}
+    .champ-trophy{font-size:6rem;animation:bounce 1.5s ease infinite alternate;margin-bottom:.5rem}
+    .champ-title{font-family:'Orbitron',sans-serif;font-size:.9rem;letter-spacing:.5em;color:var(--a);opacity:.7;text-transform:uppercase}
+    .champ-name{font-family:'Orbitron',sans-serif;font-size:clamp(2.5rem,8vw,5rem);font-weight:900;background:linear-gradient(135deg,#ffd700,#ff8c00,#ffd700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 30px rgba(255,215,0,.4));letter-spacing:.06em;line-height:1.1}
+    .champ-sub{font-size:.8rem;color:var(--g);opacity:.6;letter-spacing:.25em;text-transform:uppercase}
+    .champ-stats{display:flex;gap:2rem;margin-top:1rem;flex-wrap:wrap;justify-content:center}
+    .cs{background:rgba(0,0,0,.5);border:1px solid rgba(255,215,0,.2);border-radius:6px;padding:.8rem 1.5rem;text-align:center}
+    .csv{font-family:'Orbitron',sans-serif;font-size:2rem;color:#ffd700}
+    .csl{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;opacity:.4;margin-top:.2rem}
+    .champ-cc{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+
+    /* ─────────────────────────────────────────────
+       LEVEL COMPLETE TOAST
+    ───────────────────────────────────────────── */
+    #level-toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);z-index:500;background:rgba(6,12,24,.97);border:2px solid var(--a);border-radius:8px;padding:1.2rem 2rem;text-align:center;display:none;animation:fadeUp .4s ease}
+    #level-toast.show{display:block}
+    .lt-title{font-family:'Orbitron',sans-serif;font-size:.85rem;color:var(--a);letter-spacing:.15em;margin-bottom:.4rem}
+    .lt-sub{font-size:.75rem;opacity:.6;margin-bottom:.8rem}
+    .spinner{width:16px;height:16px;border:2px solid var(--g);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:.4rem}
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 1: PLAYER ENTRY
+═══════════════════════════════════════════ -->
+<div id="s-entry" class="screen active">
+  <div class="logo entry-logo">CODE COMBAT</div>
+  <div class="entry-sub">// League System v3.0</div>
+  <div class="entry-tag">🏆 50 PLAYERS → 5 LEVELS → 1 CHAMPION</div>
+
+  <div class="panel entry-card">
+    <div class="entry-header">
+      <h2>⚡ PLAYER REGISTRATION</h2>
+      <span class="player-count-badge" id="count-badge">0 / 50 players</span>
+    </div>
+
+    <div class="entry-info">
+      <div class="info-box"><div class="info-num" id="stat-registered">0</div><div class="info-lbl">Registered</div></div>
+      <div class="info-box"><div class="info-num" id="stat-matches">0</div><div class="info-lbl">Total Matches</div></div>
+      <div class="info-box"><div class="info-num">5</div><div class="info-lbl">Levels</div></div>
+      <div class="info-box"><div class="info-num" id="stat-rounds">0</div><div class="info-lbl">Est. Rounds</div></div>
+    </div>
+
+    <!-- Bulk paste -->
+    <div class="bulk-area" style="margin-bottom:1rem">
+      <label>📋 Bulk Paste Players (one per line, up to 50)</label>
+      <textarea id="bulk-input" placeholder="Alice&#10;Bob&#10;Charlie&#10;...paste up to 50 names" rows="3"></textarea>
+      <div style="display:flex;gap:.6rem;margin-top:.5rem">
+        <button class="btn btn-ghost" onclick="bulkLoad()" style="font-size:.7rem;padding:.45rem .9rem">LOAD NAMES</button>
+        <button class="btn btn-ghost" onclick="fillDemo()" style="font-size:.7rem;padding:.45rem .9rem">DEMO 50</button>
+        <button class="btn btn-ghost" onclick="clearAll()" style="font-size:.7rem;padding:.45rem .9rem">CLEAR ALL</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="margin-bottom:.5rem"><label>👤 Individual Slots</label></div>
+    <div class="players-grid" id="players-grid"></div>
+
+    <div class="entry-actions">
+      <button class="btn btn-g" id="btn-start-tournament" onclick="startTournament()" style="flex:1">
+        ▶ &nbsp;INITIATE TOURNAMENT
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 2: TOURNAMENT OVERVIEW
+═══════════════════════════════════════════ -->
+<div id="s-tournament" class="screen">
+  <div class="top-bar">
+    <div class="logo top-logo">CODE COMBAT</div>
+    <div class="level-badge l1" id="level-badge">LEVEL 1 — CODE COMBAT</div>
+    <div class="sock-pill bad" id="sp"><div class="conn-dot live"></div><span id="spt">OFFLINE</span></div>
+    <div style="margin-left:auto;display:flex;gap:.5rem">
+      <button class="btn btn-ghost" style="font-size:.65rem;padding:.35rem .8rem" onclick="showScreen('s-entry')">← BACK</button>
+      <button class="btn btn-ghost" style="font-size:.65rem;padding:.35rem .8rem" onclick="showScreen('s-battle')">⚔ BATTLE VIEW</button>
+    </div>
+  </div>
+
+  <!-- LEVEL NAV -->
+  <div class="levels-nav" id="levels-nav">
+    <button class="level-nav-btn current" data-level="1">L1: CODE COMBAT</button>
+    <button class="level-nav-btn" data-level="2">L2: KNOCKOUT</button>
+    <button class="level-nav-btn" data-level="3">L3: ADV. KNOCKOUT</button>
+    <button class="level-nav-btn" data-level="4">L4: SEMI-FINAL</button>
+    <button class="level-nav-btn" data-level="5">L5: FINAL BATTLE</button>
+  </div>
+
+  <div class="tournament-layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="panel">
+        <h3>📊 TOURNAMENT STATUS</h3>
+        <div class="stat-row"><span>Total Players</span><span class="stat-val" id="st-total">50</span></div>
+        <div class="stat-row"><span>Current Level</span><span class="stat-val" id="st-level">1</span></div>
+        <div class="stat-row"><span>Total Matches</span><span class="stat-val" id="st-matches">0</span></div>
+        <div class="stat-row"><span>Completed</span><span class="stat-val" id="st-done">0</span></div>
+        <div class="stat-row"><span>Remaining</span><span class="stat-val" id="st-pending">0</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
+        <div style="font-size:.6rem;opacity:.35;text-align:right;margin-top:.2rem" id="progress-text">0%</div>
+      </div>
+
+      <div class="panel">
+        <h3>🎮 CONTROLS</h3>
+        <div style="display:flex;flex-direction:column;gap:.6rem">
+          <button class="btn btn-g" id="btn-match-next" onclick="nextMatch()">▶ START NEXT MATCH</button>
+          <button class="btn btn-a" id="btn-level-advance" onclick="advanceLevel()" disabled>⬆ ADVANCE LEVEL</button>
+          <button class="btn btn-r" id="btn-reset-tournament" onclick="resetTournament()">↺ RESET TOURNAMENT</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>⚡ LEVEL INFO</h3>
+        <div id="level-info-box" style="font-size:.75rem;line-height:1.7;opacity:.7">
+          Loading...
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT (tabs) -->
+    <div>
+      <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+        <button class="btn btn-ghost tab-btn active" onclick="switchTab('matches')" data-tab="matches">MATCHES</button>
+        <button class="btn btn-ghost tab-btn" onclick="switchTab('leaderboard')" data-tab="leaderboard">LEADERBOARD</button>
+        <button class="btn btn-ghost tab-btn" onclick="switchTab('bracket')" data-tab="bracket">BRACKET</button>
+        <button class="btn btn-ghost tab-btn" onclick="switchTab('history')" data-tab="history">HISTORY</button>
+      </div>
+
+      <!-- MATCHES TAB -->
+      <div id="tab-matches" class="panel match-list">
+        <div class="match-controls">
+          <span style="font-size:.72rem;color:var(--dim)" id="match-counter">No matches</span>
+        </div>
+        <div class="match-cards" id="match-cards"></div>
+      </div>
+
+      <!-- LEADERBOARD TAB -->
+      <div id="tab-leaderboard" class="panel leaderboard" style="display:none">
+        <div class="lb-row header">
+          <div class="lb-rank">#</div>
+          <div class="lb-name">PLAYER</div>
+          <div class="lb-w">W</div>
+          <div class="lb-l">L</div>
+          <div class="lb-bye">BYE</div>
+        </div>
+        <div id="lb-body"></div>
+      </div>
+
+      <!-- BRACKET TAB -->
+      <div id="tab-bracket" style="display:none;overflow-x:auto">
+        <div id="bracket-view" style="padding:1rem;min-width:600px"></div>
+      </div>
+
+      <!-- HISTORY TAB -->
+      <div id="tab-history" class="panel" style="display:none;padding:1.2rem">
+        <h3>MATCH HISTORY</h3>
+        <div id="history-list" style="display:flex;flex-direction:column;gap:.5rem;max-height:420px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--g) transparent"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 3: LIVE BATTLE
+═══════════════════════════════════════════ -->
+<div id="s-battle" class="screen">
+  <div class="battle-header">
+    <div class="logo battle-title">CODE COMBAT</div>
+    <div class="battle-match-info" id="battle-match-info">Match 0 / Level 0</div>
+    <div class="level-badge l1" id="battle-level-badge">LEVEL 1</div>
+    <div class="sock-pill bad" id="sp2"><div class="conn-dot live"></div><span id="spt2">OFFLINE</span></div>
+    <div style="margin-left:auto;display:flex;gap:.5rem">
+      <button class="btn btn-ghost" style="font-size:.65rem;padding:.35rem .8rem" onclick="showScreen('s-tournament')">← OVERVIEW</button>
+    </div>
+  </div>
+
+  <div class="ch-strip">
+    <div><div style="font-size:.6rem;letter-spacing:.2em;opacity:.35;text-transform:uppercase">Challenge</div><div class="ch-title" id="cht">—</div></div>
+    <div class="ch-desc" id="chd">—</div>
+    <span class="badge" id="chb">—</span>
+    <div id="secondary-problem-strip" style="display:none;margin-left:.5rem;padding-left:.8rem;border-left:1px solid var(--border)">
+      <div style="font-size:.6rem;letter-spacing:.2em;opacity:.35;text-transform:uppercase">Bonus</div>
+      <div style="font-size:.82rem;color:var(--a);font-weight:700" id="cht2">—</div>
+    </div>
+  </div>
+
+  <div class="arena">
+    <!-- P1 -->
+    <div class="pc p1c panel" id="cp1">
+      <div class="ph"><div class="av">🧑‍💻</div><div><div class="pn" id="np1">PLAYER 1</div><div class="pr">Contestant · Slot 1</div></div></div>
+      <div class="tb"><div class="tl">TIME REMAINING</div><div class="tv" id="tp1">--:--</div></div>
+      <div class="sr"><div class="sd idle" id="dp1"></div><div class="st" id="stp1">Waiting…</div></div>
+      <div class="ms">
+        <div class="msc"><div class="msv" id="sv1">0</div><div class="msl">Solved</div></div>
+        <div class="msc"><div class="msv" id="tu1">--:--</div><div class="msl">Finish</div></div>
+      </div>
+      <div class="lcw">
+        <div class="lch"><div class="lcl"><div class="ld off" id="ld1"></div>Live Code</div><div class="lcc" id="lc1">0 lines</div></div>
+        <div class="lcb" id="cb1"><div class="nc">Waiting for player…</div></div>
+      </div>
+      <div class="ca">
+        <button class="ba bs" id="ss1" disabled onclick="socket.emit('host_mark_solved',{player:'p1'})">✓ Solved</button>
+        <button class="ba bf" id="sf1" disabled onclick="socket.emit('host_mark_out',{player:'p1'})">✗ Timeout</button>
+      </div>
+    </div>
+
+    <!-- VS -->
+    <div class="vs-col"><div class="vsl"></div><div class="vst">VS</div><div class="vsl"></div></div>
+
+    <!-- P2 -->
+    <div class="pc p2c panel" id="cp2">
+      <div class="ph"><div class="av">🧑‍💻</div><div><div class="pn" id="np2">PLAYER 2</div><div class="pr">Contestant · Slot 2</div></div></div>
+      <div class="tb"><div class="tl">TIME REMAINING</div><div class="tv" id="tp2">--:--</div></div>
+      <div class="sr"><div class="sd idle" id="dp2"></div><div class="st" id="stp2">Waiting…</div></div>
+      <div class="ms">
+        <div class="msc"><div class="msv" id="sv2">0</div><div class="msl">Solved</div></div>
+        <div class="msc"><div class="msv" id="tu2">--:--</div><div class="msl">Finish</div></div>
+      </div>
+      <div class="lcw">
+        <div class="lch"><div class="lcl"><div class="ld off" id="ld2"></div>Live Code</div><div class="lcc" id="lc2">0 lines</div></div>
+        <div class="lcb" id="cb2"><div class="nc">Waiting for player…</div></div>
+      </div>
+      <div class="ca">
+        <button class="ba bs" id="ss2" disabled onclick="socket.emit('host_mark_solved',{player:'p2'})">✓ Solved</button>
+        <button class="ba bf" id="sf2" disabled onclick="socket.emit('host_mark_out',{player:'p2'})">✗ Timeout</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hc">
+    <button class="btn btn-g" id="btn-start">▶ START BATTLE</button>
+    <button class="btn btn-a" id="btn-pause" disabled>⏸ PAUSE</button>
+    <button class="btn btn-r" id="btn-reset-b" disabled>↺ RESET</button>
+    <button class="btn btn-ghost" id="btn-next-match" disabled onclick="nextMatch();showScreen('s-tournament')">→ NEXT MATCH</button>
+  </div>
+
+  <!-- FINAL ROUND HOST DECLARE -->
+  <div class="final-declare" id="final-declare" style="display:none">
+    <h3>🔴 FINAL BATTLE — HOST OVERRIDE</h3>
+    <div style="font-size:.72rem;opacity:.6;margin-bottom:.8rem">Declare the winner manually based on correctness, execution time, and overall performance.</div>
+    <div class="final-btns">
+      <button class="declare-p1" id="declare-p1">🏆 DECLARE <span id="declare-p1-name">P1</span> WINNER</button>
+      <button class="declare-p2" id="declare-p2">🏆 DECLARE <span id="declare-p2-name">P2</span> WINNER</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     WINNER OVERLAY
+═══════════════════════════════════════════ -->
+<div id="wo">
+  <div class="cc" id="conf"></div>
+  <div class="wc" id="wc">🏆</div>
+  <div class="wl" id="wl">WINNER</div>
+  <div class="wn" id="wn" style="color:var(--g)">—</div>
+  <div class="wt" id="wt">—</div>
+  <div class="w-next-info" id="w-next-info"></div>
+  <div class="wo-btns">
+    <button class="btn btn-g" onclick="dismissWinner();nextMatch();showScreen('s-tournament')">→ NEXT MATCH</button>
+    <button class="btn btn-ghost" onclick="dismissWinner()">✕ DISMISS</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     CHAMPION SCREEN
+═══════════════════════════════════════════ -->
+<div id="s-champion">
+  <div class="champ-cc" id="champ-cc"></div>
+  <div class="champ-trophy">🏆</div>
+  <div class="champ-title">Code Combat League Champion</div>
+  <div class="champ-name" id="champ-name">CHAMPION</div>
+  <div class="champ-sub">// Undefeated &nbsp;·&nbsp; Level 5 Conqueror</div>
+  <div class="champ-stats">
+    <div class="cs"><div class="csv" id="champ-wins">—</div><div class="csl">Total Wins</div></div>
+    <div class="cs"><div class="csv">5</div><div class="csl">Levels Cleared</div></div>
+    <div class="cs"><div class="csv" id="champ-bye">0</div><div class="csl">BYEs Received</div></div>
+  </div>
+  <div style="margin-top:1.5rem;display:flex;gap:.8rem;flex-wrap:wrap;justify-content:center">
+    <button class="btn btn-g" onclick="document.getElementById('s-champion').classList.remove('active');showScreen('s-tournament')">VIEW BRACKET</button>
+    <button class="btn btn-ghost" onclick="resetTournament()">NEW TOURNAMENT</button>
+  </div>
+</div>
+
+<!-- LEVEL COMPLETE TOAST -->
+<div id="level-toast">
+  <div class="lt-title" id="lt-title">LEVEL COMPLETE!</div>
+  <div class="lt-sub" id="lt-sub">All matches finished. Ready to advance.</div>
+  <div style="display:flex;gap:.6rem;justify-content:center">
+    <button class="btn btn-a" style="font-size:.7rem;padding:.5rem 1.2rem" onclick="advanceLevel();hideLevelToast()">⬆ ADVANCE TO NEXT LEVEL</button>
+    <button class="btn btn-ghost" style="font-size:.7rem;padding:.5rem 1rem" onclick="hideLevelToast()">✕</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// SOCKET
+// ══════════════════════════════════════════════════
+const socket = io({ query: { role: 'host' } });
+const $ = id => document.getElementById(id);
+
+// ══════════════════════════════════════════════════
+// PLAYER ENTRY
+// ══════════════════════════════════════════════════
+const playerSlots = Array(50).fill('');
+
+function buildGrid() {
+  const grid = $('players-grid');
+  grid.innerHTML = '';
+  for (let i=0; i<50; i++) {
+    const slot = document.createElement('div');
+    slot.className = `player-slot ${playerSlots[i]?'filled':''}`;
+    slot.innerHTML = `<span class="slot-num">${String(i+1).padStart(2,'0')}</span>
+      <input class="slot-input" placeholder="Player ${i+1}" value="${playerSlots[i]||''}"
+        onchange="playerSlots[${i}]=this.value.trim();updateStats();this.closest('.player-slot').className='player-slot '+(this.value.trim()?'filled':'')"/>`;
+    grid.appendChild(slot);
+  }
+  updateStats();
+}
+
+function updateStats() {
+  const filled = playerSlots.filter(Boolean).length;
+  $('count-badge').textContent = `${filled} / 50 players`;
+  $('stat-registered').textContent = filled;
+  $('stat-matches').textContent = filled > 1 ? filled - 1 : 0;
+  $('stat-rounds').textContent = filled > 1 ? Math.ceil(Math.log2(filled)) : 0;
+}
+
+function bulkLoad() {
+  const lines = $('bulk-input').value.trim().split('\n').map(l=>l.trim()).filter(Boolean).slice(0,50);
+  lines.forEach((name,i) => { playerSlots[i] = name; });
+  buildGrid();
+}
+
+const DEMO_NAMES = ['Alice','Bob','Charlie','Diana','Eve','Frank','Grace','Hank','Iris','Jack',
+  'Kara','Leo','Maya','Noah','Olive','Pete','Quinn','Rose','Sam','Tara',
+  'Uma','Victor','Wendy','Xena','Yara','Zed','Aiden','Beth','Carl','Deb',
+  'Ethan','Fiona','Gary','Holly','Ivan','Jane','Kyle','Luna','Mike','Nora',
+  'Oscar','Pam','Ray','Sara','Tom','Uri','Vera','Will','Xia','Yogi'];
+
+function fillDemo() { DEMO_NAMES.forEach((n,i)=>{ playerSlots[i]=n; }); buildGrid(); }
+function clearAll() { playerSlots.fill(''); buildGrid(); }
+
+function startTournament() {
+  const players = playerSlots.filter(Boolean).map((name,i)=>({ id:`P${String(i+1).padStart(2,'0')}`, name }));
+  if (players.length < 2) { alert('Enter at least 2 players!'); return; }
+  socket.emit('tournament_init', { players });
+  showScreen('s-tournament');
+}
+
+buildGrid();
+
+// ══════════════════════════════════════════════════
+// SCREEN MANAGEMENT
+// ══════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+function switchTab(tab) {
+  ['matches','leaderboard','bracket','history'].forEach(t => {
+    $(`tab-${t}`).style.display = t===tab ? '' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab===tab);
+    b.style.borderColor = b.dataset.tab===tab ? 'var(--g)' : '';
+    b.style.color       = b.dataset.tab===tab ? 'var(--g)' : '';
+  });
+  if (tab==='bracket') renderBracket();
+  if (tab==='history') renderHistory();
+}
+
+// ══════════════════════════════════════════════════
+// TOURNAMENT STATE
+// ══════════════════════════════════════════════════
+let tournState = null;
+const LEVEL_NAMES = { 1:'CODE COMBAT', 2:'KNOCKOUT', 3:'ADV. KNOCKOUT', 4:'SEMI-FINAL', 5:'FINAL BATTLE' };
+const LEVEL_CLASSES = { 1:'l1', 2:'l2', 3:'l3', 4:'l4', 5:'l5' };
+const LEVEL_INFO = {
+  1: '🟢 EASY problems<br>50 players → 25 matches<br>1v1 elimination<br>Different easy problem per match',
+  2: '🔵 EASY + MEDIUM<br>25 → 13 players (BYE handled)<br>Two problems per match<br>Score both to advance',
+  3: '🟡 MEDIUM problems<br>Advanced knockout round<br>Single medium challenge<br>Winners advance',
+  4: '🟣 MEDIUM + HARD<br>Semi-final round<br>Top 2 players advance<br>Hardest battles yet',
+  5: '🔴 HARD problem<br>FINAL BATTLE — Live Showdown<br>Real-time code streaming<br>Host declares champion',
+};
+
+socket.on('tournament_state', (st) => {
+  tournState = st;
+  renderTournamentState(st);
+});
+
+socket.on('tournament_started', ({ level, totalPlayers }) => {
+  showScreen('s-tournament');
+  updateLevelUI(level);
+});
+
+socket.on('level_started', ({ level, matchCount }) => {
+  updateLevelUI(level);
+  showLevelToast(`LEVEL ${level} — ${LEVEL_NAMES[level]}`, `${matchCount} matches to play.`);
+});
+
+socket.on('level_complete', ({ level, winners, total }) => {
+  $('btn-level-advance').disabled = false;
+  $('btn-match-next').disabled = true;
+  showLevelToast(`LEVEL ${level} COMPLETE!`, `${total} players advance to Level ${level+1}.`);
+});
+
+socket.on('champion_crowned', ({ champion }) => {
+  $('champ-name').textContent = champion.name.toUpperCase();
+  $('champ-wins').textContent = champion.wins;
+  $('champ-bye').textContent  = champion.byeCount;
+  spawnGoldConfetti($('champ-cc'), 200);
+  document.getElementById('s-champion').classList.add('active');
+});
+
+socket.on('tournament_reset', () => {
+  tournState = null;
+  $('match-cards').innerHTML = '';
+  $('lb-body').innerHTML = '';
+  updateLevelUI(0);
+});
+
+function renderTournamentState(st) {
+  if (!st) return;
+  $('st-total').textContent   = st.totalPlayers;
+  $('st-level').textContent   = st.level || 0;
+  $('st-matches').textContent = st.totalMatches;
+  $('st-done').textContent    = st.doneMatches;
+  $('st-pending').textContent = st.pendingMatches;
+
+  const pct = st.totalMatches ? Math.round((st.doneMatches/st.totalMatches)*100) : 0;
+  $('progress-bar').style.width = pct + '%';
+  $('progress-text').textContent = pct + '%';
+
+  $('match-counter').textContent = st.totalMatches
+    ? `${st.doneMatches} / ${st.totalMatches} matches — ${st.pendingMatches} remaining`
+    : 'No matches yet';
+
+  renderMatchCards(st);
+  renderLeaderboard(st.players);
+
+  // Buttons
+  $('btn-match-next').disabled    = st.pendingMatches === 0 || !!st.currentMatch;
+  $('btn-level-advance').disabled = !st.levelComplete;
+  updateLevelUI(st.level);
+
+  // Final round: show declare panel
+  if (st.level === 5 && st.currentMatch) {
+    $('final-declare').style.display = '';
+    $('declare-p1-name').textContent = st.currentMatch.p1?.name || 'P1';
+    $('declare-p2-name').textContent = st.currentMatch.p2?.name || 'P2';
+  } else {
+    $('final-declare').style.display = 'none';
+  }
+}
+
+function renderMatchCards(st) {
+  const container = $('match-cards');
+  container.innerHTML = '';
+  if (!st.matches?.length) { container.innerHTML = '<div style="padding:1rem;opacity:.4;font-size:.78rem">No matches yet</div>'; return; }
+
+  st.matches.forEach(m => {
+    const card = document.createElement('div');
+    const cls  = m.status==='active'?'active':m.status==='done'?'done':'';
+    card.className = `match-card panel ${cls}`;
+    const prob1 = m.primaryProblem?.title || '—';
+    const prob2 = m.secondaryProblem?.title || null;
+    const probStr = prob2 ? `${prob1} + ${prob2}` : prob1;
+    const diff1 = m.primaryProblem?.difficulty || '';
+    card.innerHTML = `
+      <div class="mc-num">M${m.matchNum}</div>
+      <div class="mc-players">
+        <div><span class="mc-p1">${m.p1?.name||'?'}</span><span class="mc-vs">vs</span><span class="mc-p2">${m.p2?.name||'?'}</span></div>
+        <div class="mc-prob">📋 ${probStr} &nbsp;<span class="badge ${diff1}">${diff1}</span></div>
+        ${m.winner ? `<div style="font-size:.68rem;color:var(--a);margin-top:.2rem">🏆 Winner: ${m.winner.name}</div>` : ''}
+      </div>
+      <div class="mc-status ${m.status}">${m.status.toUpperCase()}</div>`;
+    container.appendChild(card);
+  });
+  // Scroll to active
+  const active = container.querySelector('.match-card.active');
+  if (active) active.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function renderLeaderboard(players) {
+  if (!players?.length) return;
+  const sorted = [...players].sort((a,b)=>(b.wins-b.losses)-(a.wins-a.losses)||b.wins-a.wins);
+  $('lb-body').innerHTML = sorted.map((p,i)=>{
+    const rank = i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1;
+    const rankCls = i===0?'gold':i===1?'silver':i===2?'bronze':'';
+    const status = p.champion?'champion':p.eliminated?'eliminated':'active';
+    return `<div class="lb-row">
+      <div class="lb-rank ${rankCls}">${rank}</div>
+      <div class="lb-name">${p.name}</div>
+      <div class="lb-w">${p.wins}</div>
+      <div class="lb-l">${p.losses}</div>
+      <div class="lb-bye">${p.byeCount||0}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderBracket() {
+  if (!tournState) return;
+  const bv = $('bracket-view');
+  const allHistory = tournState.history || [];
+  if (!allHistory.length) { bv.innerHTML='<div style="padding:1rem;opacity:.4;font-size:.78rem">No match history yet</div>'; return; }
+
+  // Group by level
+  const byLevel = {};
+  allHistory.forEach(m => {
+    if (!byLevel[m.level]) byLevel[m.level] = [];
+    byLevel[m.level].push(m);
+  });
+
+  let html = '<div style="display:flex;gap:1.5rem;flex-wrap:wrap">';
+  Object.entries(byLevel).forEach(([lvl, matches]) => {
+    html += `<div style="min-width:200px">
+      <div style="font-family:Orbitron,sans-serif;font-size:.7rem;color:var(--a);letter-spacing:.15em;margin-bottom:.8rem;text-align:center">LEVEL ${lvl} — ${LEVEL_NAMES[lvl]||''}</div>
+      <div style="display:flex;flex-direction:column;gap:.5rem">`;
+    matches.forEach(m => {
+      const w = m.winner?.name||'—';
+      const l = m.loser?.name||'—';
+      html += `<div style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:5px;padding:.5rem .8rem;font-size:.72rem">
+        <div style="color:var(--g);margin-bottom:.15rem">🏆 ${w}</div>
+        <div style="color:var(--r);opacity:.6">✗ ${l}</div>
+      </div>`;
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  bv.innerHTML = html;
+}
+
+function renderHistory() {
+  const hl = $('history-list');
+  if (!tournState?.history?.length) { hl.innerHTML='<div style="opacity:.35;font-size:.75rem">No completed matches</div>'; return; }
+  hl.innerHTML = tournState.history.map((m,i)=>`
+    <div style="background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:5px;padding:.6rem 1rem;font-size:.76rem;display:flex;align-items:center;gap:1rem">
+      <span style="color:var(--dim);min-width:70px">L${m.level}·M${m.matchNum}</span>
+      <span style="color:var(--g)">🏆 ${m.winner?.name||'—'}</span>
+      <span style="color:var(--dim)">defeated</span>
+      <span style="color:var(--r)">${m.loser?.name||'—'}</span>
+      <span class="badge ${m.primaryProblem?.difficulty||''}" style="margin-left:auto">${m.primaryProblem?.title||'—'}</span>
+    </div>`).join('');
+}
+
+function updateLevelUI(level) {
+  if (!level) return;
+  const cls = LEVEL_CLASSES[level] || 'l1';
+  $('level-badge').className = `level-badge ${cls}`;
+  $('level-badge').textContent = `LEVEL ${level} — ${LEVEL_NAMES[level]||''}`;
+  $('battle-level-badge').className = `level-badge ${cls}`;
+  $('battle-level-badge').textContent = `LEVEL ${level}`;
+  $('level-info-box').innerHTML = LEVEL_INFO[level]||'';
+  // Nav buttons
+  document.querySelectorAll('.level-nav-btn').forEach(btn => {
+    const bl = parseInt(btn.dataset.level);
+    btn.classList.remove('current','done');
+    if (bl===level) btn.classList.add('current');
+    else if (bl<level) btn.classList.add('done');
+  });
+}
+
+// ══════════════════════════════════════════════════
+// MATCH CONTROLS
+// ══════════════════════════════════════════════════
+function nextMatch() { socket.emit('match_next'); showScreen('s-battle'); }
+function advanceLevel() { socket.emit('level_advance'); $('btn-level-advance').disabled=true; }
+function resetTournament() { if(confirm('Reset entire tournament?')) { socket.emit('tournament_reset'); showScreen('s-entry'); } }
+
+socket.on('match_active', ({ matchNum, level, p1, p2, primaryProblem, secondaryProblem, matchId }) => {
+  $('battle-match-info').textContent = `Match ${matchNum} / Level ${level}`;
+  $('np1').textContent = p1.name.toUpperCase();
+  $('np2').textContent = p2.name.toUpperCase();
+  $('declare-p1-name').textContent = p1.name;
+  $('declare-p2-name').textContent = p2.name;
+
+  // Final round
+  if (level === 5) {
+    $('final-declare').style.display = '';
+    $('declare-p1-name').textContent = p1.name;
+    $('declare-p2-name').textContent = p2.name;
+  } else {
+    $('final-declare').style.display = 'none';
+  }
+  if (secondaryProblem) {
+    $('secondary-problem-strip').style.display = '';
+    $('cht2').textContent = secondaryProblem.title;
+  } else {
+    $('secondary-problem-strip').style.display = 'none';
+  }
+  // Reset battle UI
+  resetBattleUI();
+  $('btn-next-match').disabled = true;
+});
+
+// ══════════════════════════════════════════════════
+// BATTLE SOCKET EVENTS
+// ══════════════════════════════════════════════════
+let curTimeLimit=0, localSt={p1:'idle',p2:'idle'}, scores={p1:0,p2:0};
+
+socket.on('setup',({p1Name,p2Name,challengeData,timeLimit})=>{
+  curTimeLimit=timeLimit;
+  if(p1Name) $('np1').textContent=p1Name.toUpperCase();
+  if(p2Name) $('np2').textContent=p2Name.toUpperCase();
+  if(challengeData){
+    $('cht').textContent=challengeData.title;
+    $('chd').textContent=challengeData.desc;
+    $('chb').textContent=challengeData.difficulty.toUpperCase();
+    $('chb').className=`badge ${challengeData.difficulty}`;
+  }
+  fmtTimer('p1',timeLimit);fmtTimer('p2',timeLimit);
+});
+
+socket.on('battle_start',({timeLimit})=>{
+  $('btn-start').disabled=true;
+  $('btn-pause').disabled=false;
+  $('btn-reset-b').disabled=false;
+  setSt('p1','coding');setSt('p2','coding');
+  $('ss1').disabled=$('ss2').disabled=false;
+  $('sf1').disabled=$('sf2').disabled=false;
+});
+
+socket.on('battle_pause',()=>{ $('btn-pause').textContent='▶ RESUME'; });
+socket.on('battle_resume',()=>{ $('btn-pause').textContent='⏸ PAUSE'; });
+
+socket.on('battle_reset',({timeLimit})=>{ curTimeLimit=timeLimit;resetBattleUI(); });
+
+socket.on('timer_tick',({player,remaining,danger})=>{
+  fmtTimer(player,remaining);
+  $(`tp${player==='p1'?1:2}`).classList.toggle('danger',danger);
+});
+
+socket.on('player_connected',({slot})=>{
+  const p=slot==='1'?'p1':'p2';
+  $(`ld${slot}`).classList.remove('off');
+  $(`cb${slot}`).innerHTML=`<div class="nc">Player connected ✓</div>`;
+});
+
+socket.on('code_update',({slot,code})=>{
+  renderCode(slot==='1'?'p1':'p2',code);
+  $(`ld${slot}`).classList.remove('off');
+});
+
+socket.on('player_submitted',({slot,allPassed})=>{
+  const p=slot==='1'?'p1':'p2';
+  // Flash the card
+  const card=$(`cp${slot}`);
+  card.style.boxShadow=allPassed?'0 0 30px rgba(0,255,65,.3)':'0 0 20px rgba(255,51,102,.2)';
+  setTimeout(()=>card.style.boxShadow='',2000);
+});
+
+socket.on('player_solved',({player,timeUsed})=>{
+  localSt[player]='solved';
+  $(`tu${player==='p1'?1:2}`).textContent=fmt(timeUsed);
+  scores[player]++;$(`sv${player==='p1'?1:2}`).textContent=scores[player];
+  setSt(player,'solved');
+  $(`cp${player==='p1'?1:2}`).classList.add('solved');
+  $(`ss${player==='p1'?1:2}`).disabled=$(`sf${player==='p1'?1:2}`).disabled=true;
+});
+
+socket.on('player_out',({player})=>{
+  localSt[player]='out';
+  fmtTimer(player,0);setSt(player,'out');
+  $(`cp${player==='p1'?1:2}`).classList.add('out');
+  $(`ss${player==='p1'?1:2}`).disabled=$(`sf${player==='p1'?1:2}`).disabled=true;
+  $(`tu${player==='p1'?1:2}`).textContent='TIMEOUT';
+});
+
+socket.on('winner',({winner,p1Name,p2Name,finishTime,hostDeclared})=>{
+  const wn  = winner?(winner==='p1'?p1Name:p2Name).toUpperCase():'NO WINNER';
+  const wc  = !winner?'var(--r)':winner==='p1'?'var(--g)':'var(--m)';
+  $('wn').textContent=wn; $('wn').style.color=wc;
+  $('wt').textContent=winner?`Solved in ${fmt(finishTime[winner])} 🎯`:'Both players failed.';
+  $('wl').textContent=hostDeclared?'HOST DECLARED WINNER':'WINNER';
+  $('wo').classList.add('active');
+  $('btn-next-match').disabled=false;
+  spawnConfetti($('conf'),!!winner,wc);
+  $('btn-start').disabled=false;$('btn-pause').disabled=$('btn-reset-b').disabled=true;
+  $('btn-pause').textContent='⏸ PAUSE';
+});
+
+socket.on('state_sync',(st)=>{
+  if(!st) return;
+  curTimeLimit=st.timeLimit||0;
+  fmtTimer('p1',st.timers?.p1??0);
+  fmtTimer('p2',st.timers?.p2??0);
+  if(st.p1Name) $('np1').textContent=st.p1Name.toUpperCase();
+  if(st.p2Name) $('np2').textContent=st.p2Name.toUpperCase();
+  if(st.challengeData){
+    $('cht').textContent=st.challengeData.title;
+    $('chd').textContent=st.challengeData.desc;
+    $('chb').textContent=(st.challengeData.difficulty||'').toUpperCase();
+    $('chb').className=`badge ${st.challengeData.difficulty}`;
+  }
+});
+
+// ══════════════════════════════════════════════════
+// BATTLE CONTROLS
+// ══════════════════════════════════════════════════
+$('btn-start').addEventListener('click',()=>socket.emit('start'));
+$('btn-pause').addEventListener('click',()=>{
+  const pausing=$('btn-pause').textContent.includes('PAUSE');
+  socket.emit(pausing?'pause':'resume');
+});
+$('btn-reset-b').addEventListener('click',()=>socket.emit('reset'));
+$('declare-p1').addEventListener('click',()=>socket.emit('host_declare_winner',{player:'p1'}));
+$('declare-p2').addEventListener('click',()=>socket.emit('host_declare_winner',{player:'p2'}));
+
+// ══════════════════════════════════════════════════
+// SOCKET STATUS
+// ══════════════════════════════════════════════════
+function sockStatus(s){
+  const lbls={ok:'LIVE',bad:'OFFLINE',wait:'CONNECTING'};
+  ['sp','sp2'].forEach(id=>{
+    $(id).className=`sock-pill ${s==='ok'?'ok':'bad'}`;
+    $(id).querySelector('span').textContent=lbls[s]||s;
+  });
+}
+socket.on('connect',()=>sockStatus('ok'));
+socket.on('disconnect',()=>sockStatus('bad'));
+socket.on('connect_error',()=>sockStatus('bad'));
+sockStatus('wait');
+
+// ══════════════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════════════
+function fmt(s){return`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
+function fmtTimer(p,s){$(`tp${p==='p1'?1:2}`).textContent=fmt(s)}
+function setSt(p,st){
+  localSt[p]=st;
+  const idx=p==='p1'?1:2;
+  const dot=$(`dp${idx}`);
+  dot.className='sd';
+  dot.classList.add({idle:'idle',coding:p==='p2'?'p2cod':'coding',solved:'solved',out:'out'}[st]||'idle');
+  $(`stp${idx}`).textContent={idle:'Waiting…',coding:'Coding…',solved:'Solved ✓',out:'Time out ✗'}[st]||'';
+}
+
+function resetBattleUI(){
+  localSt={p1:'idle',p2:'idle'};
+  fmtTimer('p1',curTimeLimit);fmtTimer('p2',curTimeLimit);
+  setSt('p1','idle');setSt('p2','idle');
+  $('tu1').textContent=$('tu2').textContent='--:--';
+  $('ss1').disabled=$('ss2').disabled=true;
+  $('sf1').disabled=$('sf2').disabled=true;
+  $('cp1').className='pc p1c panel';$('cp2').className='pc p2c panel';
+  $('tp1').classList.remove('danger');$('tp2').classList.remove('danger');
+  $('btn-start').disabled=false;$('btn-pause').disabled=$('btn-reset-b').disabled=true;
+  $('btn-pause').textContent='⏸ PAUSE';
+  ['1','2'].forEach(s=>{
+    $(`cb${s}`).innerHTML='<div class="nc">Waiting for player…</div>';
+    $(`ld${s}`).classList.add('off');
+    $(`lc${s}`).textContent='0 lines';
+  });
+}
+
+function hl(raw){
+  let s=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  s=s.replace(/([\"'`])(?:(?!\1)[^\\\n]|\\.)*\1/g,m=>`<span class="str">${m}</span>`);
+  s=s.replace(/(?<![a-zA-Z_$])\d+(\.\d+)?(?![a-zA-Z_$])/g,m=>`<span class="num">${m}</span>`);
+  s=s.replace(/\b(function|return|if|else|for|while|let|const|var|new|this|typeof|null|undefined|true|false|class|import|export|default|of|in|do|break|continue|switch|case|throw|try|catch|finally|async|await|def|pass|and|or|not|is|elif|lambda|yield|with|as|from|print|range|len|None|True|False)\b/g,m=>`<span class="kw">${m}</span>`);
+  s=s.replace(/\b([a-zA-Z_]\w*)\s*(?=\()/g,(_,n)=>`<span class="fn">${n}</span>`);
+  s=s.replace(/(\/\/[^\n]*|#[^\n]*)/g,m=>`<span class="cmt">${m}</span>`);
+  return s;
+}
+function renderCode(p,code){
+  const slot=p==='p1'?'1':'2';
+  const lines=code.split('\n');
+  $(`lc${slot}`).textContent=`${lines.length} line${lines.length!==1?'s':''}`;
+  if(!code.trim()){$(`cb${slot}`).innerHTML='<div class="nc">Editor is empty…</div>';return}
+  const t=document.createElement('div');t.className='ct';
+  lines.forEach((line,i)=>{
+    const row=document.createElement('div');row.className='cr';
+    const n=document.createElement('span');n.className='ln';n.textContent=i+1;
+    const c=document.createElement('span');c.className='lc2';
+    c.innerHTML=hl(line)+(i===lines.length-1?'<span class="cur"></span>':'');
+    row.appendChild(n);row.appendChild(c);t.appendChild(row);
+  });
+  $(`cb${slot}`).innerHTML='';$(`cb${slot}`).appendChild(t);
+  $(`cb${slot}`).scrollTop=$(`cb${slot}`).scrollHeight;
+}
+
+function dismissWinner(){ $('wo').classList.remove('active'); }
+
+// ══════════════════════════════════════════════════
+// LEVEL TOAST
+// ══════════════════════════════════════════════════
+function showLevelToast(title, sub){ $('lt-title').textContent=title; $('lt-sub').textContent=sub; $('level-toast').classList.add('show'); }
+function hideLevelToast(){ $('level-toast').classList.remove('show'); }
+
+// ══════════════════════════════════════════════════
+// CONFETTI
+// ══════════════════════════════════════════════════
+function spawnConfetti(container, ok, color){
+  container.innerHTML='';
+  if(!ok) return;
+  const cols=color?.includes('ff00ff')?['#ff00ff','#cc00cc','#ffaaff','#fff']:['#00ff41','#00cc33','#80ffb0','#fff'];
+  for(let i=0;i<80;i++){
+    const el=document.createElement('div');el.className='cf';
+    el.style.cssText=`left:${Math.random()*100}vw;background:${cols[Math.floor(Math.random()*cols.length)]};width:${5+Math.random()*6}px;height:${5+Math.random()*8}px;animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()}s`;
+    container.appendChild(el);
+  }
+}
+function spawnGoldConfetti(container, count){
+  const cols=['#ffd700','#ffaa00','#fff','#ffa500','#ff8c00'];
+  for(let i=0;i<count;i++){
+    const el=document.createElement('div');el.className='cf';
+    el.style.cssText=`left:${Math.random()*100}vw;background:${cols[Math.floor(Math.random()*cols.length)]};width:${4+Math.random()*8}px;height:${4+Math.random()*10}px;animation-duration:${2+Math.random()*3}s;animation-delay:${Math.random()*2}s`;
+    container.appendChild(el);
+  }
+}
+</script>
+</body>
+</html>
