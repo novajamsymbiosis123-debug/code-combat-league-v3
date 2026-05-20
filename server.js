@@ -1,5 +1,12 @@
 /**
- * server.js — CODE COMBAT LEAGUE v3.0
+ * Code Combat League V3
+ * Copyright © 2026 NovaJam Symbiosis
+ * All Rights Reserved.
+ *
+ * Unauthorized copying, modification,
+ * distribution, sublicensing, or
+ * commercial use is prohibited
+ * without written permission.
  * Full 5-level tournament: 50 players → sequential 1v1 → Champion
  */
 'use strict';
