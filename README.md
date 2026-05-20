@@ -148,3 +148,9 @@ docker-compose up --build
 ---
 
 *Built with Node.js · Express · Socket.io · Vanilla JS*
+## Copyright © 2026 NovaJam Symbiosis.
+ - All Rights Reserved.
+
+ - Unauthorized copying, modification, distribution,
+ -  or commercial use of this software is prohibited
+ -   without written permission.
